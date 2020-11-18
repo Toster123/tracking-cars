@@ -1,0 +1,24 @@
+events.js:292
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::6001
+    at Server.setupListenHandle [as _listen2] (net.js:1313:16)
+    at listenInCluster (net.js:1361:12)
+    at Server.listen (net.js:1447:7)
+    at Server.listen.Server.attach (/var/www/html/track_cars/node_modules/socket.io/lib/index.js:273:9)
+    at new Server (/var/www/html/track_cars/node_modules/socket.io/lib/index.js:59:17)
+    at Server (/var/www/html/track_cars/node_modules/socket.io/lib/index.js:44:41)
+    at Object.<anonymous> (/var/www/html/track_cars/node_server/server.js:6:26)
+    at Module._compile (internal/modules/cjs/loader.js:1137:30)
+    at Object.Module._extensions..js (internal/modules/cjs/loader.js:1157:10)
+    at Module.load (internal/modules/cjs/loader.js:985:32)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (net.js:1340:8)
+    at processTicksAndRejections (internal/process/task_queues.js:84:21) {
+  code: 'EADDRINUSE',
+  errno: 'EADDRINUSE',
+  syscall: 'listen',
+  address: '::',
+  port: 6001
+}
