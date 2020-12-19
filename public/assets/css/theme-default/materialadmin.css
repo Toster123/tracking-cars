@@ -1234,8 +1234,8 @@ a.text-success:hover {
 .fixed-bottom-panel.comp {
     position: fixed;
     left: 65px;
-    height: 150px;
-    bottom: 0;
+    height: 115px;
+    bottom: 30px;
     width: 100%;
     background-color: #fff;
     margin: 0;
@@ -6672,7 +6672,8 @@ sub.badge {
   border-color: transparent #0aa89e transparent transparent;
 }
 .list-results {
-  margin-bottom: 24px;
+  /*margin-bottom: 24px;*/
+  margin-bottom: 0px;
   margin-top: 1px;
   border-left: 1px solid #f2f3f3;
 }
@@ -8053,4 +8054,30 @@ li.L8 {
   list-style-type: none;
 }
 /* Alternate shading for lines */
+
+.widget-item p {
+    margin: 0;
+    padding: 0;
+}
+
+.widget-item .connection_status {
+    -webkit-border-radius: 100px;
+    -moz-border-radius: 100px;
+    -ms-border-radius: 100px;
+    -o-border-radius: 100px;
+    border-radius: 100px;
+    width: 14px;
+    height: 14px;
+    margin: 0px 0;
+    display: inline-block;
+    vertical-align: bottom;
+    margin-right: 3px;
+    border: none;
+}
+.widget-item .connection_status.active {
+    background-color: #69CF01;
+}
+.widget-item .connection_status.offline {
+    background-color: #FE6700;
+}
 

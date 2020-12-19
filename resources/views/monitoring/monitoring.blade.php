@@ -52,15 +52,47 @@
                 <div class="row">
                     <!-- BEGIN BASIC MAP -->
                     <div id="pageContent" class="col-md-12">
-                        <div class="card" style="height:100vh;">
+                        <div class="card" style="height:100vh;margin-bottom:0px;">
                             <div class="card-body no-padding">
-                                <div id="basic-map" class="border-gray height-10" style="height:100vh;"></div>
+                                <div id="basic-map" class="border-gray height-10" style="height:calc(100vh - 30px);"></div>
                             </div>
                         </div><!--end .card -->
 
                         <!-- TRIPS -->
 
-                        <div id="carPanel"></div><!-- Сюда будет подгружаться панель для машины -->
+						<div style="position:absolute;bottom:30px;width:100%;" id="carPanel"></div><!-- Сюда будет подгружаться панель для машины -->
+						<div style="position:absolute;top:64px;height:35px;padding:5px 0;width:100%;background:#ffffff;border-bottom: 1px solid black">
+
+							<div class="col-md-2">
+							<span style="color:#000;float:left;margin: 0 15px 0 0;">Карта: </span>
+								<ul style="
+    list-style: none;">
+								<li style="
+    float: left;
+	margin: 0 5px 0 0;
+    width: 20px;
+    color: #000;"><a href="javascript:map.setMapTypeId('roadmap');">1</a></li>
+								<li style="
+    float: left;
+	margin: 0 5px 0 0;
+    width: 20px;
+    color: #000;"><a href="javascript:map.setMapTypeId('hybrid');">2</a></li>
+								<li style="
+    float: left;
+	margin: 0 5px 0 0;
+    width: 20px;
+    color: #000;"><a href="javascript:map.setMapTypeId('terrain');">3</a></li>
+								</ul>
+							</div>
+							<div class="col-md-2">
+								<input id="placeSearch" style="
+    line-height: 20px;
+    height: 100%;
+    width: 100%;
+    float: left;" type="text" placeholder="Поиск..." />
+							</div>
+
+						</div>
 
                     </div><!--end .col -->
                     <!-- END BASIC MAP -->
@@ -93,7 +125,7 @@
                 <li class="gui-folder expanded">
                     <a>
                         <div class="gui-icon"><i class="md md-computer"></i></div>
-                        <span class="title">Мониторинг</span>
+                        <span class="title">Машины</span>
                     </a>
                     <!--start submenu -->
                     <ul>
@@ -240,7 +272,7 @@
 <script src="{{asset('assets/js/libs/autosize/jquery.autosize.min.js')}}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
 <script src="https://unpkg.com/@google/markerclustererplus@5.1.0/dist/markerclustererplus.min.js"></script>
-<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCgbUiGX0mdRPWz0A9N3XGs0bGPxns6FxQ&callback=initMap&libraries=geometry&v=weekly" defer></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCgbUiGX0mdRPWz0A9N3XGs0bGPxns6FxQ&callback=initMap&libraries=geometry,places&v=weekly" defer></script>
 <!-- <script src="assets/js/libs/gmaps/gmaps.js"></script> -->
 <script src="{{asset('assets/js/libs/nanoscroller/jquery.nanoscroller.min.js')}}"></script>
 <script src="{{asset('assets/js/core/source/App.js')}}"></script>
@@ -265,6 +297,488 @@
     //---
 
     var socket = io('http://376174.msk-ovz.ru:6001');
+    //обработка событий сокетов в конце
+
+
+    //---вспомогательные функции---
+
+    function randomHex() {
+        let output = '';
+        for (let i = 0; i < 6; ++i) {
+            output += (Math.floor(Math.random() * 16)).toString(16);
+        }
+        return output;
+    }
+
+    //для поиска улиц
+    function placeChanged() {
+        let place = autocomplete.getPlace();
+        if (place.geometry) {
+            map.panTo(place.geometry.location);
+            map.setZoom(15);
+        }
+    }
+
+    //для карты
+
+    function selectCar (id) {
+        $.ajax({
+            url : 'http://376174.msk-ovz.ru/monitoring/cars/' + id,
+            type : 'GET',
+            datatype : 'json',
+            success : function (data) {
+                data = JSON.parse(data);
+                if (data.car && data.car.latest_moving) {
+
+                    selectedCar = data.car._id;
+
+                    removeTrips();
+
+                    document.getElementById('carPanel').innerHTML = data.panel;
+                    document.getElementById('mobileCarPanel').innerHTML = data.mobile_panel;
+
+                    document.getElementById('basic-map').setAttribute('style','height: calc(100vh - 145px); position: relative; overflow: hidden;');
+
+                    map.setZoom(17);
+                    map.panTo({'lat' : parseFloat(data.car.latest_moving.lat), 'lng' : parseFloat(data.car.latest_moving.lng)});
+
+                    document.getElementById('events').hidden = true;
+
+                    document.getElementById('eventsCar').innerHTML = data.events;
+                    document.getElementById('eventsCar').hidden = false;
+
+                    document.getElementById('calendar').innerHTML = data.calendar;
+
+                    selectedCarInterval = setInterval(function () {
+                        let minutes = Number(document.getElementById('carPanelMinutes').innerHTML);
+                        minutes++;
+                        document.getElementById('carPanelMinutes').innerHTML = minutes;
+                        document.getElementById('mobileCarPanelMinutes').innerHTML = minutes;
+                    }, 60000);
+
+                    // geocoder.geocode({'latLng' : {'lat' : parseFloat(data.car.latest_moving.lat), 'lng' : parseFloat(data.car.latest_moving.lng)}}, function (res, st) {
+                    //     console.log(res, st);
+                    // });
+                    $.ajax({
+                            'url': 'https://geocode-maps.yandex.ru/1.x/?apikey=69281f91-22b2-45bd-b749-d46b51d6311a&format=json&geocode=' + parseFloat(data.car.latest_moving.lng) + ',' + parseFloat(data.car.latest_moving.lat),
+                            'type': 'GET',
+                            success: function (res) {
+                                document.getElementById('carPanelAdress').innerHTML = res.response.GeoObjectCollection.featureMember[0].GeoObject.name;
+                            }
+                        }
+                    );
+                }
+            },
+        });
+    }
+
+    function unselectCar (id) {
+        selectedCar = false;
+        removeTrips();
+
+        document.getElementById('carPanel').innerHTML = '';
+        document.getElementById('mobileCarPanel').innerHTML = '';
+
+        document.getElementById('basic-map').setAttribute('style','height: calc(100vh - 30px); position: relative; overflow: hidden;');
+
+        document.getElementById('eventsCar').innerHTML = '';
+        document.getElementById('eventsCar').hidden = true;
+
+        document.getElementById('events').hidden = false;
+
+        selectedCarInterval = false;
+
+        document.getElementById('calendar').innerHTML = '<li class="tile"><div class="tile-content"><div class="tile-text"><small>Выберите машину, чтобы посмотреть ее поездки</small></div></div></li>';
+    }
+
+    //для панели слева
+
+    function selectGroupCheckbox (el) {
+        var cars = $('input[type="checkbox"][name="' + el.getAttribute('name') + '"]').prop('checked', el.checked);
+
+        for (let key in indexes[el.getAttribute('name')]) {
+            if (el.checked) {
+                markerCluster.addMarker(markers[indexes[el.getAttribute('name')][key]]);
+            } else {
+                markerCluster.removeMarker(markers[indexes[el.getAttribute('name')][key]]);
+            }
+        }
+    }
+
+    function selectCarCheckbox (el) {
+        var group = $('input[type="checkbox"][data-type="group"][name="' + el.getAttribute('name') + '"]');
+
+        if (el.checked) {
+            var cars = $('input[type="checkbox"][data-type="car"][name="' + el.getAttribute('name') + '"]');
+
+            let isAllChecked = true;
+            for (let i = 0; i < cars.length; i++) {
+                if (!cars[i].checked) {
+                    isAllChecked = false;
+                    break;
+                }
+            }
+            if (isAllChecked) {
+                group.prop('checked', true);
+            }
+        } else {
+            group.prop('checked', false);
+        }
+
+        if (el.checked) {
+            markerCluster.addMarker(markers[indexes[el.getAttribute('name')][el.getAttribute('data-imei')]]);
+        } else {
+            markerCluster.removeMarker(markers[indexes[el.getAttribute('name')][el.getAttribute('data-imei')]]);
+        }
+
+    }
+
+    //для поездок
+
+    function selectDisplayUpToCurrentTime (el) {
+        if (el.checked) {
+            document.getElementById('upToDate').value = '';
+            document.getElementById('upToDate').disabled = true;
+            document.getElementById('upToTime').value = '';
+            document.getElementById('upToTime').disabled = true;
+        } else {
+            document.getElementById('upToDate').disabled = false;
+            document.getElementById('upToTime').disabled = false;
+        }
+    }
+
+    function tripsADay () {
+        let date = new Date;
+        date.setDate(date.getDate() - 1);
+        document.getElementById('fromDate').value = date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate();
+        document.getElementById('fromTime').value = date.getHours() + ':' + date.getMinutes();
+        document.getElementById('displayUpToCurrentTime').checked = true;
+        selectDisplayUpToCurrentTime(document.getElementById('displayUpToCurrentTime'));
+    }
+    function tripsAWeek () {
+        let date = new Date;
+        date.setDate(date.getDate() - 7);
+        document.getElementById('fromDate').value = date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate();
+        document.getElementById('fromTime').value = date.getHours() + ':' + date.getMinutes();
+        document.getElementById('displayUpToCurrentTime').checked = true;
+        selectDisplayUpToCurrentTime(document.getElementById('displayUpToCurrentTime'));
+    }
+    function tripsAMonth () {
+        let date = new Date;
+        document.getElementById('fromDate').value = date.getFullYear() + '-' + date.getMonth() + '-' + date.getDate();
+        document.getElementById('fromTime').value = date.getHours() + ':' + date.getMinutes();
+        document.getElementById('displayUpToCurrentTime').checked = true;
+        selectDisplayUpToCurrentTime(document.getElementById('displayUpToCurrentTime'));
+    }
+
+    $(document).on('submit', '#travelPeriodForm', function (e) {
+        e.preventDefault();
+        if (document.getElementById('fromDate').value &&
+            (document.getElementById('upToDate').value || document.getElementById('displayUpToCurrentTime').checked)) {
+
+            if (document.getElementById('fromTime').value == '' || document.getElementById('fromTime').value.length < 5) {
+                document.getElementById('fromTime').value = '00:00';
+            }
+            if ((document.getElementById('upToTime').value == '' || document.getElementById('upToTime').value.length < 5) && !document.getElementById('displayUpToCurrentTime').checked) {
+                document.getElementById('upToTime').value = '23:59';
+            }
+            let data = $(this).serialize();
+            $.ajax({
+                url: document.getElementById('travelPeriodForm').action,
+                type: 'POST',
+                datatype: 'json',
+                data: data,
+                success: function (data) {
+                    if (data) {
+                        removeTrips();
+
+                        data = JSON.parse(data);
+
+                        $('#travelResult').append(data.view);
+
+                        let color;
+                        for (let key in data.path) {
+                            color = "#" + randomHex();
+                            trips[key] = new google.maps.Polyline({
+                                path: data.path[key],
+                                icons: [{
+                                    icon: {
+                                        path: 'M -1,-2 0,-0.7 1,-2 0,2.5 z',
+                                        strokeColor : '#000',
+                                        strokeWeight : 1.5,
+                                        fillColor: color,
+                                        fillOpacity: 1,
+                                        scale: 6,
+                                        rotation : 180,
+                                    },
+                                    offset: '100%',
+                                    repeat: '180px',
+                                }],
+                                strokeColor: color,
+                                strokeWeight: 9,
+                                strokeOpacity: 0.5,
+                                map: map
+                            });
+
+                            google.maps.event.addListener(trips[key], 'click', function (event) {
+                                let coordinates = event.latLng;
+                                let needle = {coordinates: {lat: 0, lng: 0}};
+                                let distance;
+
+                                trips[key].getPath().forEach(function (point, index) {
+                                    distance = google.maps.geometry.spherical.computeDistanceBetween(coordinates, point);
+                                    if (!needle['minDistance'] || needle['minDistance'] > distance) {
+                                        needle['minDistance'] = distance;
+                                        needle['index'] = index;
+                                        needle['coordinates'] = {lat: point.lat(), lng: point.lng()};
+                                    }
+                                });
+
+                                $.ajax({
+                                    url: 'http://376174.msk-ovz.ru/monitoring/trips/' + key + '/moving',
+                                    type: 'POST',
+                                    datatype: 'json',
+                                    data: {trip_id : key, lat : needle['coordinates']['lat'], lng : needle['coordinates']['lng']},
+                                    success: function (data) {
+                                        if (data) {
+                                            let date = new Date(data.created_at),
+                                                mounth = date.getMonth() + 1,
+                                                days = date.getDate(),
+                                                hours = date.getHours(),
+                                                minutes = date.getMinutes();
+                                            if (mounth.toString().length < 2) mounth = '0' + mounth;
+                                            if (days.toString().length < 2) days = '0' + days;
+                                            if (hours.toString().length < 2) hours = '0' + hours;
+                                            if (minutes.toString().length < 2) minutes = '0' + minutes;
+
+                                            date = days + '.' + mounth + '.' + date.getFullYear() + ' ' + hours + ':' + minutes;
+
+                                            tripInfowindow.close();
+                                            tripInfowindow.setPosition({lat: parseFloat(data.lat), lng: parseFloat(data.lng)});
+                                            tripInfowindow.setContent(
+                                                '<p><strong>Время:</strong> ' + date + '</p>' +
+                                                '<p><strong>Скорость:</strong> ' + data.speed + 'км/час</p>' +
+                                                '<p><strong>Широта:</strong> ' + data.lat + '</p>' +
+                                                '<p><strong>Долгота:</strong> ' + data.lng + '</p>'
+                                            );
+                                            tripInfowindow.open(map);
+                                        }
+                                    }
+                                });
+
+                            });
+
+                            trips[key].setVisible(false);
+                        }
+
+                        isTripsShowing = true;
+                        isTripsShowingUpToCurrentTime = document.getElementById('displayUpToCurrentTime').checked;
+                    }
+                }
+            });
+        }
+    });
+
+    function selectAllTripsCheckbox (el) {
+        $('input[type="checkbox"][name="' + el.getAttribute('name') + '"]').prop('checked', el.checked);
+
+        for (let key in trips) {
+            trips[key].setVisible(el.checked);
+        }
+    }
+
+    function selectTripCheckbox (el) {
+        let selectAllCheckbox = $('input[type="checkbox"][data-type="all"][name="' + el.getAttribute('name') + '"]');
+
+        if (el.checked) {
+            let tripsCheckboxes = $('input[type="checkbox"][data-type="trip"][name="' + el.getAttribute('name') + '"]');
+
+            let isAllChecked = true;
+            for (let i = 0; i < tripsCheckboxes.length; i++) {
+                if (!tripsCheckboxes[i].checked) {
+                    isAllChecked = false;
+                    break;
+                }
+            }
+            if (isAllChecked) {
+                selectAllCheckbox.prop('checked', true);
+            }
+        } else {
+            selectAllCheckbox.prop('checked', false);
+        }
+        trips[el.getAttribute('id')].setVisible(el.checked);
+    }
+
+    function removeTrips () {
+        if (document.getElementById('trips')) {
+            document.getElementById('trips').remove();
+        }
+
+        for(key in trips) {
+            trips[key].setMap(null);
+        }
+        trips = {};
+        isTripsShowing = false;
+        isTripsShowingUpToCurrentTime = false;
+    }
+
+    //для событий
+
+    function selectEvent (el) {
+        if (el.getAttribute('data-lat') && el.getAttribute('data-lng')) {
+            eventInfowindow.close();
+            eventInfowindow.setPosition(new google.maps.LatLng(parseFloat(el.getAttribute('data-lat')), parseFloat(el.getAttribute('data-lng'))));
+            eventInfowindow.setContent(el.innerHTML);
+            eventInfowindow.open(map);
+            map.setZoom(17);
+            map.panTo(new google.maps.LatLng(parseFloat(el.getAttribute('data-lat')), parseFloat(el.getAttribute('data-lng'))));
+        }
+    }
+
+    //подгрузка
+    let is_loading;
+    $(document).bind('scrollend', '.nano-content', function (e) {
+        is_loading = selectedCar ? $('#eventsCar').children().last().attr('id') == 'last ' : $('#events').children().last().attr('id') == 'last ';
+        if (!is_loading) {
+            is_loading = true;
+
+            if (selectedCar) {
+                $.ajax({
+                    url: 'http://376174.msk-ovz.ru/monitoring/cars/' + selectedCar + '/events/more',
+                    method: 'POST',
+                    data: {'id' : $('#eventsCar').children().last().attr('id')},
+                    datatype: 'html',
+                    success: function (data) {
+                        $('#eventsCar').append(data);
+                        if ($('#eventsCar').children().last().attr('id') !== 'last ') {
+                            is_loading = false;
+                        }
+                    }
+                });
+            } else {
+                $.ajax({
+                    url: '{{route('events.more')}}',
+                    method: 'POST',
+                    data: {'id' : $('#events').children().last().attr('id')},
+                    datatype: 'html',
+                    success: function (data) {
+                        $('#events').append(data);
+                        if ($('#events').children().last().attr('id') !== 'last ') {
+                            is_loading = false;
+                        }
+                    }
+                });
+            }
+
+        }
+    });
+    //---
+
+    //---карта---
+    let map;
+    let eventInfowindow;
+    let tripInfowindow;
+    var selectedCar = false;
+    var isTripsShowing = false;
+    var isTripsShowingUpToCurrentTime = false;
+    var trips = {};
+    var markers = [];
+    var indexes = {};
+    let selectedCarInterval;
+    let geocoder;
+    let autocomplete;
+    let places;
+    var markerCluster;
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("basic-map"), {
+            center: {lat: 43.337926, lng: 76.938093},
+            zoom: 11
+        });
+        let point;
+        let color;
+        let markerImage;
+        let i = 0;
+        @foreach($groups as $group)
+            indexes['{{$group->_id}}'] = {};
+
+        color = '{{$group->color}}';
+        if (color[0] !== '#') {
+            color = '#' + color;
+        }
+
+
+        @foreach($group->cars as $car)
+            @php
+                $coordinates = $car->lastCoordinates() ?: (Object)['lat' => 43.337926, 'lng' => 76.938093, 'course' => 0];
+            @endphp
+            point = {lat: parseFloat({{$coordinates->lat}}), lng: parseFloat({{$coordinates->lng}})};
+        markers[i] = new google.maps.Marker({
+            position: point,
+            title: '{{$car->title}}',
+            icon: {
+                path: 'M -1.5,-2.9 0,-1.2 1.5,-2.9 0,2.9 z',
+                strokeColor: '#000',
+                strokeWeight: 1.5,
+                fillColor: color,
+                fillOpacity: 1,
+                scale: 6,
+                rotation: Number('{{(int)$coordinates->course > 180 ? $coordinates->course - 180 : $coordinates->course + 180}}')
+            }
+        });
+        indexes['{{$group->_id}}']['{{$car->imei}}'] = i;
+        markers[i].addListener('click', function () {
+            selectCar('{{$car->_id}}');
+        });
+        i++;
+        @endforeach
+            @endforeach
+
+
+            @if(!empty($cars->toArray()))
+            indexes['nothing'] = {};
+
+        @foreach($cars as $car)
+            @php
+                $coordinates = $car->lastCoordinates() ?: (Object)['lat' => 43.337926, 'lng' => 76.938093, 'course' => 0];
+            @endphp
+            point = new google.maps.LatLng(parseFloat({{$coordinates->lat}}), parseFloat({{$coordinates->lng}}));
+        markers[i] = new google.maps.Marker({
+            position: point,
+            title: '{{$car->title}}',
+            icon: {
+                path: 'M -1.5,-2.9 0,-1.2 1.5,-2.9 0,2.9 z',
+                strokeColor: '#000',
+                strokeWeight: 1.5,
+                fillColor: '#FE7569',
+                fillOpacity: 1,
+                scale: 6,
+                rotation: Number('{{(int)$coordinates->course > 180 ? $coordinates->course - 180 : $coordinates->course + 180}}')
+            }
+        });
+        indexes['nothing']['{{$car->imei}}'] = i;
+        markers[i].addListener('click', function () {
+            selectCar('{{$car->_id}}');
+        });
+        i++;
+        @endforeach
+            @endif
+
+            markerCluster = new MarkerClusterer(map, markers,
+            {imagePath: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m'});
+
+
+        eventInfowindow = new google.maps.InfoWindow({});
+        tripInfowindow = new google.maps.InfoWindow({});
+        geocoder = new google.maps.Geocoder();
+        places = new google.maps.places.PlacesService(map);
+        autocomplete = new google.maps.places.Autocomplete(
+            document.getElementById('placeSearch'), {
+            });
+        autocomplete.addListener('place_changed', placeChanged);
+    };
+    //---
+
+    //---обработка событий сокетов---
 
     socket.on('moving', function (data) {
         console.log(data);
@@ -290,27 +804,25 @@
             document.getElementById('mobileCarPanelMinutes').innerHTML = 0;
 
             document.getElementById('carPanelLat').innerHTML = data.lat;
-            document.getElementById('mobileCarPanelLat').innerHTML = data.lat;
             document.getElementById('carPanelSpeed').innerHTML = data.speed;
             document.getElementById('mobileCarPanelSpeed').innerHTML = data.speed;
             document.getElementById('carPanelSignal').innerHTML = 100;
             document.getElementById('mobileCarPanelSignal').innerHTML = 100;
             document.getElementById('carPanelLng').innerHTML = data.lng;
-            document.getElementById('mobileCarPanelLng').innerHTML = data.lng;
 
             geocoder.geocode({'latLng' : {'lat' : parseFloat(data.lat), 'lng' : parseFloat(data.lng)}}, function (res, st) {
                 console.log(res, st);
             });
 
-        if (isTripsShowing && trips) {
-            let mileage = Number(document.getElementById('notEndedTripMileage').innerHTML);
-            if (mileage instanceof Number) {
-                document.getElementById('notEndedTripMileage').innerHTML = Math.round(mileage + Number(data.mileage), 3);
+            if (isTripsShowing && trips) {
+                let mileage = Number(document.getElementById('notEndedTripMileage').innerHTML);
+                if (mileage instanceof Number) {
+                    document.getElementById('notEndedTripMileage').innerHTML = Math.round(mileage + Number(data.mileage), 3);
+                }
+                if (isTripsShowingUpToCurrentTime) {
+                    trips[Object.keys(trips)[0]].getPath().push(new google.maps.LatLng(parseFloat(data.lat),parseFloat(data.lng)));
+                }
             }
-            if (isTripsShowingUpToCurrentTime) {
-                trips[Object.keys(trips)[0]].getPath().push(new google.maps.LatLng(parseFloat(data.lat),parseFloat(data.lng)));
-            }
-        }
         }
     });
 
@@ -403,6 +915,13 @@
         let description;
         switch (data.type) {
             case 0 :
+                if (selectedCar == data.car_id) {
+                    document.getElementById('carPanelSignal').innerHTML = 100;
+                    document.getElementById('mobileCarPanelSignal').innerHTML = 100;
+                    document.getElementById('carPanelConnectionIndicator').classList.add('active');
+                    document.getElementById('carPanelConnectionIndicator').classList.remove('offline');
+                    document.getElementById('carPanelConnectionStatus').innerHTML = 'На связи';
+                }
                 description = 'подключен';
                 html += '<li class="tile">\n' +
                     '        <a class="tile-content ink-reaction" onclick="selectEvent(this)" date-lat="' + data.lat + '" date-lng="' + data.lng + '" data-toggle="offcanvas" data-backdrop="false">\n' +
@@ -414,6 +933,15 @@
                     '    </li>';
                 break;
             case 1 :
+                if (selectedCar == data.car_id) {
+                    document.getElementById('carPanelSignal').innerHTML = 0;
+                    document.getElementById('mobileCarPanelSignal').innerHTML = 0;
+                    document.getElementById('carPanelSpeed').innerHTML = 0;
+                    document.getElementById('mobileCarPanelSpeed').innerHTML = 0;
+                    document.getElementById('carPanelConnectionIndicator').classList.add('offline');
+                    document.getElementById('carPanelConnectionIndicator').classList.remove('active');
+                    document.getElementById('carPanelConnectionStatus').innerHTML = 'Отключен';
+                }
                 description = 'отключен или прервана связь';
                 html += '<li class="tile">\n' +
                     '        <a class="tile-content ink-reaction" onclick="selectEvent(this)" date-lat="' + data.lat + '" date-lng="' + data.lng + '" data-toggle="offcanvas" data-backdrop="false">\n' +
@@ -425,6 +953,7 @@
                     '    </li>';
                 break;
             case 2 :
+
                 description = 'вход';
                 html += '<li class="tile">\n' +
                     '        <a class="tile-content ink-reaction" data-toggle="offcanvas" data-backdrop="false">\n' +
@@ -458,6 +987,10 @@
                     '    </li>';
                 break;
             case 5 :
+                if (selectedCar == data.car_id) {
+                    document.getElementById('carPanelSpeed').innerHTML = 0;
+                    document.getElementById('mobileCarPanelSpeed').innerHTML = 0;
+                }
                 description = 'зажигание выключено';
                 html += '<li class="tile">\n' +
                     '        <a class="tile-content ink-reaction" onclick="selectEvent(this)" date-lat="' + data.lat + '" date-lng="' + data.lng + '" data-toggle="offcanvas" data-backdrop="false">\n' +
@@ -480,6 +1013,10 @@
                     '    </li>';
                 break;
             case 7 :
+                if (selectedCar == data.car_id) {
+                    document.getElementById('carPanelSpeed').innerHTML = 0;
+                    document.getElementById('mobileCarPanelSpeed').innerHTML = 0;
+                }
                 description = 'остановился';
                 html += '<li class="tile">\n' +
                     '        <a class="tile-content ink-reaction" onclick="selectEvent(this)" date-lat="' + data.lat + '" date-lng="' + data.lng + '" data-toggle="offcanvas" data-backdrop="false">\n' +
@@ -503,432 +1040,7 @@
         } else {
             toastr.info(data.title, description);
         }
-
     });
-
-    //подгрузка
-    var is_loading;
-    $(document).bind('scrollend', '.nano-content', function (e) {
-        is_loading = selectedCar ? $('#eventsCar').children().last().attr('id') == 'last ' : $('#events').children().last().attr('id') == 'last ';
-        if (!is_loading) {
-            is_loading = true;
-
-            if (selectedCar) {
-                $.ajax({
-                    url: 'http://376174.msk-ovz.ru/monitoring/cars/' + selectedCar + '/events/more',
-                    method: 'POST',
-                    data: {'id' : $('#eventsCar').children().last().attr('id')},
-                    datatype: 'html',
-                    success: function (data) {
-                        $('#eventsCar').append(data);
-                        if ($('#eventsCar').children().last().attr('id') !== 'last ') {
-                            is_loading = false;
-                        }
-                    }
-                });
-            } else {
-                $.ajax({
-                    url: '{{route('events.more')}}',
-                    method: 'POST',
-                    data: {'id' : $('#events').children().last().attr('id')},
-                    datatype: 'html',
-                    success: function (data) {
-                        $('#events').append(data);
-                        if ($('#events').children().last().attr('id') !== 'last ') {
-                            is_loading = false;
-                        }
-                    }
-                });
-            }
-
-        }
-    });
-
-
-    //-----
-
-    function randomHex() {
-        let output = '';
-        for (let i = 0; i < 6; ++i) {
-            output += (Math.floor(Math.random() * 16)).toString(16);
-        }
-        return output;
-    }
-
-    //---карты-----
-
-
-    let map;
-    let eventInfowindow;
-    let tripInfowindow;
-    var selectedCar = false;
-    var isTripsShowing = false;
-    var isTripsShowingUpToCurrentTime = false;
-    var trips = {};
-    var markers = [];
-    var indexes = {};
-    let selectedCarInterval;
-    let geocoder;
-    var markerCluster;
-    function initMap() {
-        map = new google.maps.Map(document.getElementById("basic-map"), {
-            center: { lat: 43.337926, lng: 76.938093 },
-            zoom: 11
-        });
-        let point;
-        let color;
-        let markerImage;
-        let i = 0;
-        @foreach($groups as $group)
-            indexes['{{$group->_id}}'] = {};
-
-            color = '{{$group->color}}';
-            if (color[0] !== '#') {
-                color = '#' + color;
-            }
-
-
-        @foreach($group->cars as $car)
-            @php
-                $coordinates = $car->lastCoordinates() ?: (Object)['lat' => 43.337926, 'lng' => 76.938093, 'course' => 0];
-            @endphp
-            point = {lat: parseFloat({{$coordinates->lat}}), lng: parseFloat({{$coordinates->lng}})};
-            markers[i] = new google.maps.Marker({
-                position: point,
-                title: '{{$car->title}}',
-                icon: {
-                    path: 'M -1.5,-2.9 0,-1.2 1.5,-2.9 0,2.9 z',
-                    strokeColor : '#000',
-                    strokeWeight : 1.5,
-                    fillColor: color,
-                    fillOpacity: 1,
-                    scale: 6,
-                    rotation: Number('{{(int)$coordinates->course > 180 ? $coordinates->course - 180 : $coordinates->course + 180}}')
-                }
-            });
-            indexes['{{$group->_id}}']['{{$car->imei}}'] = i;
-            i++;
-            @endforeach
-        @endforeach
-
-
-            @if(!empty($cars->toArray()))
-                indexes['nothing'] = {};
-
-        @foreach($cars as $car)
-            @php
-                $coordinates = $car->lastCoordinates() ?: (Object)['lat' => 43.337926, 'lng' => 76.938093, 'course' => 0];
-            @endphp
-            point = new google.maps.LatLng(parseFloat({{$coordinates->lat}}),parseFloat({{$coordinates->lng}}));
-            markers[i] = new google.maps.Marker({
-            position: point,
-            title: '{{$car->title}}',
-                icon: {
-                    path: 'M -1.5,-2.9 0,-1.2 1.5,-2.9 0,2.9 z',
-                    strokeColor : '#000',
-                    strokeWeight : 1.5,
-                    fillColor: '#FE7569',
-                    fillOpacity: 1,
-                    scale: 6,
-                    rotation: Number('{{(int)$coordinates->course > 180 ? $coordinates->course - 180 : $coordinates->course + 180}}')
-                }
-        });
-        indexes['nothing']['{{$car->imei}}'] = i;
-            i++;
-        @endforeach
-            @endif
-
-            markerCluster = new MarkerClusterer(map, markers,
-            {imagePath: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m'});
-
-
-        eventInfowindow = new google.maps.InfoWindow({});
-        tripInfowindow = new google.maps.InfoWindow({});
-        geocoder = new google.maps.Geocoder();
-    };
-
-
-    function selectGroupCheckbox (el) {
-        var cars = $('input[type="checkbox"][name="' + el.getAttribute('name') + '"]').prop('checked', el.checked);
-
-        for (let key in indexes[el.getAttribute('name')]) {
-            if (el.checked) {
-                markerCluster.addMarker(markers[indexes[el.getAttribute('name')][key]]);
-            } else {
-                markerCluster.removeMarker(markers[indexes[el.getAttribute('name')][key]]);
-            }
-        }
-    }
-
-    function selectCarCheckbox (el) {
-        var group = $('input[type="checkbox"][data-type="group"][name="' + el.getAttribute('name') + '"]');
-
-        if (el.checked) {
-            var cars = $('input[type="checkbox"][data-type="car"][name="' + el.getAttribute('name') + '"]');
-
-            let isAllChecked = true;
-            for (let i = 0; i < cars.length; i++) {
-                if (!cars[i].checked) {
-                    isAllChecked = false;
-                    break;
-                }
-            }
-            if (isAllChecked) {
-                group.prop('checked', true);
-            }
-        } else {
-            group.prop('checked', false);
-        }
-
-        if (el.checked) {
-            markerCluster.addMarker(markers[indexes[el.getAttribute('name')][el.getAttribute('data-imei')]]);
-        } else {
-            markerCluster.removeMarker(markers[indexes[el.getAttribute('name')][el.getAttribute('data-imei')]]);
-        }
-
-    }
-
-
-
-
-    function selectDisplayUpToCurrentTime (el) {
-        if (el.checked) {
-            document.getElementById('upToDate').value = '';
-            document.getElementById('upToDate').disabled = true;
-            document.getElementById('upToTime').value = '';
-            document.getElementById('upToTime').disabled = true;
-        } else {
-            document.getElementById('upToDate').disabled = false;
-            document.getElementById('upToTime').disabled = false;
-        }
-    }
-
-    $(document).on('submit', '#travelPeriodForm', function (e) {
-        e.preventDefault();
-        if (document.getElementById('fromDate').value &&
-            (document.getElementById('upToDate').value || document.getElementById('displayUpToCurrentTime').checked)) {
-
-            if (document.getElementById('fromTime').value == '' || document.getElementById('fromTime').value.length < 5) {
-                document.getElementById('fromTime').value = '00:00';
-            }
-            if ((document.getElementById('upToTime').value == '' || document.getElementById('upToTime').value.length < 5) && !document.getElementById('displayUpToCurrentTime').checked) {
-                document.getElementById('upToTime').value = '23:59';
-            }
-            let data = $(this).serialize();
-            $.ajax({
-                url: document.getElementById('travelPeriodForm').action,
-                type: 'POST',
-                datatype: 'json',
-                data: data,
-                success: function (data) {
-                    if (data) {
-                        removeTrips();
-
-                        data = JSON.parse(data);
-
-                        $('#pageContent').append(data.view);
-
-                        let color;
-                        for (let key in data.path) {
-                            color = "#" + randomHex();
-                            trips[key] = new google.maps.Polyline({
-                                path: data.path[key],
-                                icons: [{
-                                    icon: {
-                                        path: 'M -1.1,-2.6 0,-0.8 1.1,-2.6 0,2.6 z',
-                                        strokeColor : '#000',
-                                        strokeWeight : 1.5,
-                                        fillColor: color,
-                                        fillOpacity: 1,
-                                        scale: 6,
-                                        rotation : 180,
-                                    },
-                                    offset: '100%',
-                                    repeat: '180px',
-                                }],
-                                strokeColor: color,
-                                strokeWeight: 8,
-                                map: map
-                            });
-                            trips[key].setVisible(false);
-
-                            google.maps.event.addListener(trips[key], 'click', function (event) {
-                                let coordinates = event.latLng;
-                                let needle = {coordinates: {lat: 0, lng: 0}};
-                                let distance;
-
-                                trips[key].getPath().forEach(function (point, index) {
-                                    distance = google.maps.geometry.spherical.computeDistanceBetween(coordinates, point);
-                                    if (!needle['minDistance'] || needle['minDistance'] > distance) {
-                                        needle['minDistance'] = distance;
-                                        needle['index'] = index;
-                                        needle['coordinates'] = {lat: point.lat(), lng: point.lng()};
-                                    }
-                                });
-
-                                $.ajax({
-                                    url: 'http://376174.msk-ovz.ru/monitoring/trips/' + key + '/moving',
-                                    type: 'POST',
-                                    datatype: 'json',
-                                    data: {trip_id : key, lat : needle['coordinates']['lat'], lng : needle['coordinates']['lng']},
-                                    success: function (data) {
-                                        if (data) {
-                                            let date = new Date(data.created_at),
-                                                mounth = date.getMonth() + 1,
-                                                days = date.getDate(),
-                                                hours = date.getHours(),
-                                                minutes = date.getMinutes();
-                                            if (mounth.toString().length < 2) mounth = '0' + mounth;
-                                            if (days.toString().length < 2) days = '0' + days;
-                                            if (hours.toString().length < 2) hours = '0' + hours;
-                                            if (minutes.toString().length < 2) minutes = '0' + minutes;
-
-                                            date = days + '.' + mounth + '.' + date.getFullYear() + ' ' + hours + ':' + minutes;
-
-                                            tripInfowindow.close();
-                                            tripInfowindow.setPosition({lat: parseFloat(data.lat), lng: parseFloat(data.lng)});
-                                            tripInfowindow.setContent(
-                                                '<p><strong>Время:</strong> ' + date + '</p>' +
-                                                '<p><strong>Скорость:</strong> ' + data.speed + 'км/час</p>' +
-                                                '<p><strong>Широта:</strong> ' + data.lat + '</p>' +
-                                                '<p><strong>Долгота:</strong> ' + data.lng + '</p>'
-                                            );
-                                            tripInfowindow.open(map);
-                                        }
-                                    }
-                                });
-
-                            });
-
-                        }
-                        isTripsShowing = true;
-                        isTripsShowingUpToCurrentTime = document.getElementById('displayUpToCurrentTime').checked;
-
-
-                    }
-                }
-            });
-        }
-    });
-
-
-    function selectAllTripsCheckbox (el) {
-        $('input[type="checkbox"][name="' + el.getAttribute('name') + '"]').prop('checked', el.checked);
-
-        for (let key in trips) {
-            trips[key].setVisible(el.checked);
-        }
-    }
-
-
-
-    function selectTripCheckbox (el) {
-        let selectAllCheckbox = $('input[type="checkbox"][data-type="all"][name="' + el.getAttribute('name') + '"]');
-
-        if (el.checked) {
-            let tripsCheckboxes = $('input[type="checkbox"][data-type="trip"][name="' + el.getAttribute('name') + '"]');
-
-            let isAllChecked = true;
-            for (let i = 0; i < tripsCheckboxes.length; i++) {
-                if (!tripsCheckboxes[i].checked) {
-                    isAllChecked = false;
-                    break;
-                }
-            }
-            if (isAllChecked) {
-                selectAllCheckbox.prop('checked', true);
-            }
-        } else {
-            selectAllCheckbox.prop('checked', false);
-        }
-
-
-        trips[el.getAttribute('id')].setVisible(el.checked);
-    }
-
-
-
-    function removeTrips () {
-        if (document.getElementById('trips')) {
-            document.getElementById('trips').remove();
-        }
-
-        for(key in trips) {
-            trips[key].setMap(null);
-        }
-        trips = {};
-        isTripsShowing = false;
-        isTripsShowingUpToCurrentTime = false;
-    }
-
-
-
-    function selectCar (id) {
-        $.ajax({
-            url : 'http://376174.msk-ovz.ru/monitoring/cars/' + id,
-            type : 'GET',
-            datatype : 'json',
-            success : function (data) {
-                data = JSON.parse(data);
-                if (data.car && data.car.latest_moving) {
-
-                    selectedCar = data.car._id;
-
-                    document.getElementById('carPanel').innerHTML = data.panel;
-                    document.getElementById('mobileCarPanel').innerHTML = data.mobile_panel;
-
-                    map.setZoom(17);
-                    map.panTo({'lat' : parseFloat(data.car.latest_moving.lat), 'lng' : parseFloat(data.car.latest_moving.lng)});
-
-                    document.getElementById('events').hidden = true;
-
-                    document.getElementById('eventsCar').innerHTML = data.events;
-                    document.getElementById('eventsCar').hidden = false;
-
-                    document.getElementById('calendar').innerHTML = data.calendar;
-
-                    selectedCarInterval = setInterval(function () {
-                        let minutes = Number(document.getElementById('carPanelMinutes').innerHTML);
-                        minutes++;
-                        document.getElementById('carPanelMinutes').innerHTML = minutes;
-                        document.getElementById('mobileCarPanelMinutes').innerHTML = minutes;
-                    }, 60000);
-
-                    geocoder.geocode({'latLng' : {'lat' : parseFloat(data.car.latest_moving.lat), 'lng' : parseFloat(data.car.latest_moving.lng)}}, function (res, st) {
-                        console.log(res, st);
-                    });
-                }
-            },
-        });
-    }
-
-    function unselectCar (id) {
-        selectedCar = false;
-        removeTrips();
-
-        document.getElementById('carPanel').innerHTML = '';
-        document.getElementById('mobileCarPanel').innerHTML = '';
-
-        document.getElementById('eventsCar').innerHTML = '';
-        document.getElementById('eventsCar').hidden = true;
-
-        document.getElementById('events').hidden = false;
-
-        selectedCarInterval = false;
-
-        document.getElementById('calendar').innerHTML = '<li class="tile"><div class="tile-content"><div class="tile-text"><small>Выберите машину, чтобы посмотреть ее поездки</small></div></div></li>';
-    }
-
-    function selectEvent (el) {
-        if (el.getAttribute('data-lat') && el.getAttribute('data-lng')) {
-                eventInfowindow.close();
-            eventInfowindow.setPosition(new google.maps.LatLng(parseFloat(el.getAttribute('data-lat')), parseFloat(el.getAttribute('data-lng'))));
-            eventInfowindow.setContent(el.innerHTML);
-            eventInfowindow.open(map);
-            map.setZoom(17);
-            map.panTo(new google.maps.LatLng(parseFloat(el.getAttribute('data-lat')), parseFloat(el.getAttribute('data-lng'))));
-        }
-    }
 </script>
 <!-- END JAVASCRIPT -->
 

@@ -11,7 +11,7 @@
     <div class="header-nav-ul-li">
         <div class="gui-icon"><i class="fa fa-puzzle-piece fa-fw"></i></div><div class="header-nav-ul-li-span"><span id="mobileCarPanelMinutes">{{number_format((float)(strtotime(now()) - strtotime($car->latest_moving ? $car->latest_moving->created_at : $car->created_at)) / 60, 0, ',', '')}}</span> мин. назад</div></div>
     <div class="header-nav-ul-li">
-        <div class="gui-icon"><i class="fa fa-puzzle-piece fa-fw"></i></div><div class="header-nav-ul-li-span">Сигнал: <span id="mobileCarPanelSignal">100</span>%</div></div>
+        <div class="gui-icon"><i class="fa fa-puzzle-piece fa-fw"></i></div><div class="header-nav-ul-li-span">Сигнал: <span id="mobileCarPanelSignal">{{$car->latest_event ? ($car->latest_event->type == 1 ? 0 : 100) : 0}}</span>%</div></div>
     <div class="header-nav-ul-li">
         <div class="gui-icon"><i class="fa fa-puzzle-piece fa-fw"></i></div><div class="header-nav-ul-li-span">Скорость: <span id="mobileCarPanelSpeed">{{$car->latest_moving ? $car->latest_moving->speed : 0}}</span>км/ч</div></div>
 </div>

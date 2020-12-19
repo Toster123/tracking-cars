@@ -10,7 +10,7 @@ var
 
     urlDB = "mongodb://127.0.0.2:27017",
     enabled = {},
-    timeouts = {},
+    signalTimeouts = {},
     carsTrips = {},
     latestCoordinates = {},
     campTimeouts = {},
@@ -22,9 +22,8 @@ var
     redis = new Redis(6379, '127.0.0.2');
 io.set('origins', 'http://376174.msk-ovz.ru:*');
 //{path: '/sock/socket.io'}
-
-
 //functions
+
 function getDistanceInKm(lat1,lon1,lat2,lon2) {
     var R = 6371; // Radius of the earth in km
     var dLat = (lat2-lat1) * (Math.PI/180);  // deg2rad below
@@ -56,6 +55,7 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
     });
 
     io.on('connection', function (socket) {
+
         request.get({
                 url : 'http://376174.msk-ovz.ru/getRoom',
                 headers : {cookie : socket.request.headers.cookie},
@@ -67,6 +67,7 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                     console.log(json.room);
                 } else {
                     socket.on('token', function (token) {
+                        console.log(token);
                         request.get({
                                 url : 'http://376174.msk-ovz.ru/getRoom',
                                 headers : {cookie : socket.request.headers.cookie},
@@ -92,37 +93,42 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
     var server = net.createServer(function (socket) {
 
         socket.on('data', function (data) {
-            data = data.toString();
-            console.log(data);
-            data = data.split(',');
-            if (data && data[16]) {
+            console.log(data.toString('hex').match(/.{2}/g).join(' '));
+            let bytes = data.toString('hex').match(/.{2}/g).join(' ').split(' ');
 
-                let imei = data[1];
+            if (bytes) {
+                let imei = bytes[1] + bytes[2] + bytes[3] + bytes[4] + bytes[5];
                 let car = cars[imei];
 
                 if (car) {
-
                     let rooms = [];
                     if (car.user_id) {
                         rooms.push(car.user_id);
                     }
 
-                    let N = parseFloat(data[5]),
-                        E = parseFloat(data[7]);
+                    let N = parseFloat(bytes[12] + bytes[13] + '.' + bytes[14] + bytes[15]),
+                        E = parseFloat(bytes[17] + bytes[18] + bytes[19][0] + '.' + bytes[19][1] + bytes[20] + bytes[21][0]);
+                    data = {
+                        'imei' : imei,
+                        'time' : bytes[6] + bytes[7] + bytes[8],
+                        'date' : bytes[9] + bytes[10] + bytes[11],
+                        'lat' : Math.floor(N/100)+((((N/100)-Math.floor(N/100))*100)/60),
+                        'lng' : Math.floor(E/100)+((((E/100)-Math.floor(E/100))*100)/60),
+                        'speed' : parseFloat(parseFloat(bytes[22] + bytes[23][0]).toFixed(1)),
+                        'course' : Number(bytes[23][1] + bytes[24]),
+                        'status' : bytes[25] + bytes[26] + bytes[27] + bytes[28],
+                    };
+                    console.log(data.lat, data.lng);
 
-                    let lat = Math.floor(N/100)+((((N/100)-Math.floor(N/100))*100)/60),
-                        lng = Math.floor(E/100)+((((E/100)-Math.floor(E/100))*100)/60);
-                    console.log(lat, lng);
-
-                    clearTimeout(timeouts[imei]);
-                    timeouts[imei] = false;
-
+                    clearTimeout(signalTimeouts[imei]);
+                    signalTimeouts[imei] = false;
+//0.01
                     if (latestCoordinates[imei] &&
-                        !((Math.abs(lat) > Math.abs(latestCoordinates[imei][0] - 0.0007) &&
-                            Math.abs(lat) < Math.abs(latestCoordinates[imei][0] + 0.0007)) &&
-                            (Math.abs(lng) > Math.abs(latestCoordinates[imei][1] - 0.0007) &&
-                                Math.abs(lng) < Math.abs(latestCoordinates[imei][1] + 0.0007)))) {
-                        console.log('norm');
+                        !((Math.abs(data.lat) > Math.abs(latestCoordinates[imei][0] - 0.0007) &&
+                            Math.abs(data.lat) < Math.abs(latestCoordinates[imei][0] + 0.0007)) &&
+                            (Math.abs(data.lng) > Math.abs(latestCoordinates[imei][1] - 0.0007) &&
+                                Math.abs(data.lng) < Math.abs(latestCoordinates[imei][1] + 0.0007)))) {
+                        console.log('driving');
 
                         clearTimeout(campEventTimeouts[imei]);
                         campEventTimeouts[imei] = false;
@@ -131,18 +137,17 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
 
                         if (!isMoving[imei]) {
 
-                            let date = new Date();
-                            date = new Date(date.setHours(date.getHours() + 3));
+                            // date = new Date(date.setHours(date.getHours() + 3));
                             let event = {
                                 'type': 6,
                                 'car_id': car._id.toString(),
                                 'title': car.title,
                                 'imei': imei,
-                                'lat': lat,
-                                'lng': lng,
-                                'speed' : parseFloat(parseFloat(data[9]).toFixed(1)),
-                                'course' : Number(data[10]),
-                                'created_at': date
+                                'lat': data.lat,
+                                'lng': data.lng,
+                                'speed' : data.speed,
+                                'course' : data.course,
+                                'created_at': new Date()
                             };
 
                             io.to(['admin']).to(rooms).emit('event', event);
@@ -159,11 +164,9 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
 
                         if (!carsTrips[imei]) {
 
-                            let date = new Date();
-                            date = new Date(date.setHours(date.getHours() + 3));
                             let trip = {
                                 'car_id': car._id.toString(),
-                                'created_at': date,
+                                'created_at': new Date(),
                                 'ended_at': null,
                                 'mileage': null,
                             };
@@ -181,22 +184,20 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
 
                         }
 
-
-                        let mileage = getDistanceInKm(lat, lng, latestCoordinates[imei][0], latestCoordinates[imei][1]);
+                        let mileage = getDistanceInKm(data.lat, data.lng, latestCoordinates[imei][0], latestCoordinates[imei][1]);
                         console.log(mileage);
-                        let date = new Date();
-                        date = new Date(date.setHours(date.getHours() + 3));
+
                         let moving = {
                             'car_id': car._id.toString(),
                             'group_id': car.group_id ? car.group_id.toString() : null,
                             'imei': imei,
                             'trip_id': carsTrips[imei],
-                            'lat': lat,
-                            'lng': lng,
-                            'speed' : isMoving[imei] ? parseFloat(parseFloat(data[9]).toFixed(1)) : 0.0,
-                            'course' : Number(data[10]),
+                            'lat': data.lat,
+                            'lng': data.lng,
+                            'speed' : isMoving[imei] ? data.speed : 0.0,
+                            'course' : data.course,
                             'mileage' : mileage,
-                            'created_at' : date
+                            'created_at' : new Date()
                         };
 
                         io.to(['admin']).to(rooms).emit('moving', moving);
@@ -220,28 +221,26 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                             redis.set('laravel_database_trip:mileage:' + carsTrips[imei], response);
                         });
 
-                        latestCoordinates[imei] = [lat, lng];
+                        latestCoordinates[imei] = [data.lat, data.lng];
                     } else {
                         if (!latestCoordinates[imei]) {
-                            latestCoordinates[imei] = [lat, lng];
+                            latestCoordinates[imei] = [data.lat, data.lng];
                         }
 
                         console.log('stay');
                         if (!campEventTimeouts[imei] && isMoving[imei]) {
                             campEventTimeouts[imei] = setTimeout(function () {
 
-                                let date = new Date();
-                                date = new Date(date.setHours(date.getHours() + 3));
                                 let event = {
                                     'type': 7,
                                     'car_id': car._id.toString(),
                                     'title': car.title,
                                     'imei': imei,
-                                    'lat': lat,
-                                    'lng': lng,
+                                    'lat': data.lat,
+                                    'lng': data.lng,
                                     'speed' : 0.0,
-                                    'course' : Number(data[10]),
-                                    'created_at': date
+                                    'course' : data.course,
+                                    'created_at': new Date()
                                 };
 
                                 io.to(['admin']).to(rooms).emit('event', event);
@@ -270,16 +269,13 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                                         response = 0;
                                     }
 
-                                    let date = new Date();
-                                    date = new Date(date.setHours(date.getHours() + 3));
-
                                     io.to(['admin']).to(rooms).emit('tripEnded', {
                                         'car_id': car._id.toString(),
-                                        'ended_at': date,
+                                        'ended_at': new Date(),
                                         'mileage': response,
                                     });
 
-                                    trips.updateOne({_id: new ObjectID(carsTrips[imei])}, {$set : {ended_at: date, mileage: response}}, function (err, response) {
+                                    trips.updateOne({_id: new ObjectID(carsTrips[imei])}, {$set : {ended_at: new Date(), mileage: response}}, function (err, response) {
                                         if (err) {
                                             throw err;
                                         }
@@ -297,22 +293,21 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                     }
 
 
-
                     if (!enabled[imei]) {
                         enabled[imei] = true;
 
-                        let date = new Date();
-                        date = new Date(date.setHours(date.getHours() + 3));
+                        console.log('on');
+
                         let event = {
                             'type': 0,
                             'car_id': car._id.toString(),
                             'title': car.title,
                             'imei': imei,
-                            'lat': lat,
-                            'lng': lng,
-                            'speed' : isMoving[imei] ? parseFloat(parseFloat(data[9]).toFixed(1)) : 0.0,
-                            'course' : Number(data[10]),
-                            'created_at': date
+                            'lat': data.lat,
+                            'lng': data.lng,
+                            'speed' : isMoving[imei] ? data.speed : 0.0,
+                            'course' : data.course,
+                            'created_at': new Date()
                         };
                         io.to(['admin']).to(rooms).emit('event', event);
 
@@ -323,22 +318,20 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                         });
                     }
 
-                    if (!timeouts[imei]) {
-                        timeouts[imei] = setTimeout(function () {
-                            console.log('enabl');
+                    if (!signalTimeouts[imei]) {
+                        signalTimeouts[imei] = setTimeout(function () {
+                            console.log('off');
 
-                            let date = new Date();
-                            date = new Date(date.setHours(date.getHours() + 3));
                             let event = {
                                 'type': 1,
                                 'car_id': car._id.toString(),
                                 'title': car.title,
                                 'imei': imei,
-                                'lat': lat,
-                                'lng': lng,
-                                'speed' : isMoving[imei] ? parseFloat(parseFloat(data[9]).toFixed(1)) : 0.0,
-                                'course' : Number(data[10]),
-                                'created_at': date
+                                'lat': data.lat,
+                                'lng': data.lng,
+                                'speed' : isMoving[imei] ? data.speed : 0.0,
+                                'course' : data.course,
+                                'created_at': new Date()
                             };
                             io.to(['admin']).to(rooms).emit('event', event);
 
@@ -354,18 +347,16 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                             if (!campEventTimeouts[imei] && isMoving[imei]) {
                                 campEventTimeouts[imei] = setTimeout(function () {
 
-                                    let date = new Date()
-                                    date = new Date(date.setHours(date.getHours() + 3));
                                     let event = {
                                         'type': 7,
                                         'car_id': car._id.toString(),
                                         'title': car.title,
                                         'imei': imei,
-                                        'lat': lat,
-                                        'lng': lng,
+                                        'lat': data.lat,
+                                        'lng': data.lng,
                                         'speed' : 0.0,
-                                        'course' : Number(data[10]),
-                                        'created_at': date
+                                        'course' : data.course,
+                                        'created_at': new Date()
                                     };
                                     io.to(['admin']).to(rooms).emit('event', event);
 
@@ -393,16 +384,13 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                                             response = 0;
                                         }
 
-                                        let date = new Date();
-                                        date = new Date(date.setHours(date.getHours() + 3));
-
                                         io.to(['admin']).to(rooms).emit('tripEnded', {
                                             'car_id': car._id.toString(),
-                                            'ended_at': date,
+                                            'ended_at': new Date(),
                                             'mileage': response,
                                         });
                                         console.log('update');
-                                        trips.updateOne({_id: new ObjectID(carsTrips[imei])}, {$set: {ended_at: date, mileage: response}}, function (err, response) {
+                                        trips.updateOne({_id: new ObjectID(carsTrips[imei])}, {$set: {ended_at: new Date(), mileage: response}}, function (err, response) {
                                             if (err) {
                                                 throw err;
                                             }
@@ -417,25 +405,21 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                         }, 45000);
                     }
 
-
-                    let status = data[12];
-                    let power = status.slice(4, 5);
+                    let power = data.status.slice(4, 5);
 
                     if (power == '9' && !powerStatuses[imei]) {//если включена
                         powerStatuses[imei] = true;
 
-                        let date = new Date();
-                        date = new Date(date.setHours(date.getHours() + 3));
                         let event = {
                             'type': 4,
                             'car_id': car._id.toString(),
                             'title': car.title,
                             'imei': imei,
-                            'lat': lat,
-                            'lng': lng,
-                            'speed' : isMoving[imei] ? parseFloat(parseFloat(data[9]).toFixed(1)) : 0.0,
-                            'course' : Number(data[10]),
-                            'created_at': date
+                            'lat': data.lat,
+                            'lng': data.lng,
+                            'speed' : isMoving[imei] ? data.speed : 0.0,
+                            'course' : data.course,
+                            'created_at': new Date()
                         };
                         io.to(['admin']).to(rooms).emit('event', event);
 
@@ -445,21 +429,19 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
                             }
                         });
 
-                    } else if (power == 'B' && powerStatuses[imei]) {//если выключена
+                    } else if (power == 'b' && powerStatuses[imei]) {//если выключена
                         powerStatuses[imei] = false;
 
-                        let date = new Date();
-                        date = new Date(date.setHours(date.getHours() + 3));
                         let event = {
                             'type': 5,
                             'car_id': car._id.toString(),
                             'title': car.title,
                             'imei': imei,
-                            'lat': lat,
-                            'lng': lng,
-                            'speed' : isMoving[imei] ? parseFloat(parseFloat(data[9]).toFixed(1)) : 0.0,
-                            'course' : Number(data[10]),
-                            'created_at': date
+                            'lat': data.lat,
+                            'lng': data.lng,
+                            'speed' : isMoving[imei] ? data.speed : 0.0,
+                            'course' : data.course,
+                            'created_at': new Date()
                         };
                         io.to(['admin']).to(rooms).emit('event', event);
 
@@ -478,8 +460,7 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
             }
         });
 
-        socket.on("error", function (data) {
-        });
+        socket.on("error", function (data) {});
 
     });
 
@@ -490,7 +471,7 @@ MongoClient.connect(urlDB, { useNewUrlParser: true }, function(err, client) {
 
 //
 redisSubscribed = new Redis(6379, '127.0.0.2');
-    redisSubscribed.psubscribe('*', function (error, count) {
+redisSubscribed.psubscribe('*', function (error, count) {
 //...
 });
 

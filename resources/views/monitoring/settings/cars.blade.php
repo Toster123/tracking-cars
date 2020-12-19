@@ -290,40 +290,41 @@
                         <ul>
 
                             @foreach($groups as $group)
-                            <li class="gui-folder">
-                                <a href="javascript:void(0);">
-                                     <span class="title">{{$group->title}}</span>
-                                </a>
-                                <!--start submenu -->
-                                <ul>
-                                    @if(!empty($group->cars->toArray()))
-                                        <li><a class="checkbox-styled"><label><input checked type="checkbox" value="a"></label><label><span class="title">Выбрать все</span></label></a></li>
-                                    @endif
+                                <li class="gui-folder">
+                                    <a href="javascript:void(0);">
+                                        <span class="title">{{$group->title}}</span>
+                                    </a>
+                                    <!--start submenu -->
+                                    <ul>
+                                        @if(!empty($group->cars->toArray()))
+                                            <li><a class="checkbox-styled"><label><input checked type="checkbox"></label><label><span class="title">Выбрать все</span></label></a></li>
+                                        @endif
 
-                                    @foreach($group->cars as $car)
-                                        <li><a class="checkbox-styled"><label><input checked type="checkbox" value="a"></label><label><span class="title">{{$car->title}}</span></label></a></li>
+                                        @foreach($group->cars as $car)
+                                            <li><a class="checkbox-styled"><label><input checked type="checkbox"></label><label style="cursor: pointer"><span class="title">{{$car->title}}</span></label></a></li>
                                         @endforeach
 
-                                </ul><!--end /submenu -->
-                            </li><!--end /menu-li -->
-                        @endforeach
+                                    </ul><!--end /submenu -->
+                                </li><!--end /menu-li -->
+                            @endforeach
 
-                                @if(!empty($cars->toArray()))
-                                    <li class="gui-folder">
-                                        <a href="javascript:void(0);">
-                                            <span class="title">Без группы</span>
-                                        </a>
-                                        <!--start submenu -->
-                                        <ul>
-                                            <li><a class="checkbox-styled"><label><input checked type="checkbox" value="a"></label><label><span class="title">Выбрать все</span></label></a></li>
+                            @if(!empty($cars->toArray()))
+                                <li class="gui-folder">
+                                    <a href="javascript:void(0);">
+                                        <span class="title">Без группы</span>
+                                    </a>
+                                    <!--start submenu -->
+                                    <ul>
+                                        <li><a class="checkbox-styled"><label><input checked type="checkbox"></label><label><span class="title">Выбрать все</span></label></a></li>
 
-                                            @foreach($cars as $car)
-                                                <li><a class="checkbox-styled"><label><input checked type="checkbox" value="a"></label><label><span class="title">{{$car->title}}</span></label></a></li>
-                                            @endforeach
+                                        @foreach($cars as $car)
+                                            <li><a class="checkbox-styled"><label><input checked type="checkbox"></label><label style="cursor: pointer"><span class="title">{{$car->title}}</span></label></a></li>
+                                        @endforeach
 
-                                        </ul><!--end /submenu -->
-                                    </li><!--end /menu-li -->
-                                @endif
+                                    </ul><!--end /submenu -->
+                                </li><!--end /menu-li -->
+                            @endif
+
 
                         </ul><!--end /submenu -->
                     </li><!--end /menu-li -->
@@ -339,8 +340,17 @@
                         <ul>
                             <li><a href="{{route('settings.cars')}}"><span class="title">Настройки маячков</span></a></li>
                         </ul><!--end /submenu -->
-                    </li><!--end /menu-li -->
-                    <!-- END FORMS -->
+                        <!-- END FORMS -->
+                    </li>
+                    <li class="gui-folder">
+                        <a>
+                            <div class="gui-icon"><i class="fa fa-puzzle-piece fa-fw"></i></div>
+                            <span class="title">Пользователь</span>
+                        </a>
+                        <ul>
+                            <li><a href="{{route('get:logout')}}"><span class="title">Выход</span></a></li>
+                        </ul>
+                    </li>
 
                 </ul><!--end .main-menu -->
                 <!-- END MAIN MENU -->

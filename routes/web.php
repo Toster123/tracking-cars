@@ -16,6 +16,7 @@ use App\Trip;
 use App\User;
 use App\Group;
 Route::get('/', function () {
+    dd(now());
     $t = Trip::find('5f983f4abe07b76f98b329d8');
 dd($t->getMileage());
     $acars = \Illuminate\Support\Facades\Auth::user()->cars()->get();

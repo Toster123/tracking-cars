@@ -7,12 +7,14 @@ use App\Http\Controllers\UserController as UserController;
 use App\Car;
 use App\Event;
 use App\Group;
+use App\Moving;
 
 class MonitoringController extends UserController
 {
     public function monitoring () {
+		 
         if ($this->user->role == $this->roles['admin']) {
-            $cars = Car::where('group_id', null)->with('group')->get();
+            $cars = Car::where('group_id', null)->with('group')->get(); 
             $groups = Group::with('cars')->get();
             $events = Event::orderBy('created_at', 'DESC')->limit(12)->get();
         } elseif ($this->user->role == $this->roles['user']) {
@@ -25,6 +27,8 @@ class MonitoringController extends UserController
             }
             $events = Event::whereIn('car_id', $carsIds)->orderBy('created_at', 'DESC')->limit(12)->get();
         }
+		
+		
 
         return view('monitoring.monitoring', compact('cars', 'groups', 'events'));
     }

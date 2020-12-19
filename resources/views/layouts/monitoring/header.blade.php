@@ -7,7 +7,7 @@
                 <li class="header-nav-brand" >
                     <div class="brand-holder">
                         <a href="{{route('monitoring')}}">
-                            <span class="text-lg text-bold text-primary">Admin panel</span>
+                            <span class="text-lg text-bold text-primary">Мониторинг</span>
                         </a>
                     </div>
                 </li>

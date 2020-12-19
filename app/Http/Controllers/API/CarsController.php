@@ -36,7 +36,8 @@ class CarsController extends APIController
     }
 
     public function car (Request $request, $car_id) {
-        $car = Car::find($car_id);
+        $car = Car::find($car_id); 
+		$car->parking = 60;
         if (!$car) {
             return $this->sendError('Машина не найдена', 404);
         }
@@ -53,6 +54,9 @@ class CarsController extends APIController
         if ((int)$request->withLatestData) {
             $car = $this->getCarsLatestData([$car])[0];
         }
+		
+		$car->status = 1;
+		
         return $this->sendResponse($car);
     }
 

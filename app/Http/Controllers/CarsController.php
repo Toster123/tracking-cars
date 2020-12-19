@@ -26,6 +26,10 @@ class CarsController extends UserController
 
             $car->setAttribute('latest_event', !empty($events->toArray()) ? $events[0] : null);
 
+            $car->setAttribute('signal', $car->getSignal());
+
+            $car->setAttribute('is_driving', $car->getDrivingStatus());
+
             return json_encode([
                 'car' => $car,
                 'events' => view('layouts.monitoring.events', compact('events'))->render(),

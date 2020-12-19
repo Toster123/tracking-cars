@@ -1,4 +1,4 @@
-<div id="trips" class="col-md-5 col-lg-4 height-6 scroll-sm">
+<div id="trips" class="col-md-12 col-lg-12 height-6 scroll-sm">
     <div class="list-group list-email list-gray">
 
 
